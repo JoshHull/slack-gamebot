@@ -4,7 +4,7 @@ describe Season do
   let!(:team) { Fabricate(:team) }
   context 'with challenges' do
     let!(:open_challenge) { Fabricate(:challenge) }
-    let!(:matches) { 3.times.map { Fabricate(:match) } }
+    let!(:matches) { Array.new(3) { Fabricate(:match) } }
     let!(:season) { Fabricate(:season, team: team) }
     it 'archives challenges' do
       expect(season.challenges.count).to eq 4
@@ -33,6 +33,24 @@ describe Season do
       expect(season.to_s).to eq 'Current: n/a, 0 matches, 0 players'
     end
   end
+  context 'without challenges and a lost match' do
+    let!(:team) { Fabricate(:team) }
+    let(:challenger) { Fabricate(:user, team: team) }
+    let(:challenged) { Fabricate(:user, team: team) }
+    let(:season) { Season.new(team: team) }
+    before do
+      ::Match.lose!(team: team, winners: [challenger], losers: [challenged])
+    end
+    it 'can be created' do
+      expect(season).to be_valid
+    end
+    it 'to_s' do
+      expect(season.to_s).to eq "Current: #{season.winners.map(&:to_s).and}, 1 match, 2 players"
+    end
+    it 'has one winner' do
+      expect(season.winners.count).to eq 1
+    end
+  end
   context 'current season with one match' do
     let!(:match) { Fabricate(:match) }
     let(:season) { Season.new(team: team) }
@@ -45,7 +63,7 @@ describe Season do
   end
   context 'current season with multiple matches and one winner' do
     let(:user) { Fabricate(:user, team: team) }
-    let!(:matches) { 3.times.map { Fabricate(:match, challenge: Fabricate(:challenge, challengers: [user])) } }
+    let!(:matches) { Array.new(3) { Fabricate(:match, challenge: Fabricate(:challenge, challengers: [user])) } }
     let(:season) { Season.new(team: team) }
     it 'to_s' do
       expect(season.to_s).to eq "Current: #{season.winners.map(&:to_s).and}, 3 matches, 4 players"
@@ -64,8 +82,8 @@ describe Season do
     end
   end
   context 'current season with two winners' do
-    let!(:matches) { 2.times.map { Fabricate(:match, team: team) } }
-    let!(:matches) { 2.times.map { Fabricate(:match, team: team) } }
+    let!(:matches) { Array.new(2) { Fabricate(:match, team: team) } }
+    let!(:matches) { Array.new(2) { Fabricate(:match, team: team) } }
     let(:season) { Season.new(team: team) }
     it 'has two winners' do
       expect(season.winners.count).to eq 2

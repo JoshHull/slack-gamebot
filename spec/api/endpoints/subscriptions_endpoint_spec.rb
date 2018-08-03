@@ -11,22 +11,23 @@ describe Api::Endpoints::SubscriptionsEndpoint do
         expect(json['type']).to eq 'param_error'
       end
     end
-    context 'premium team' do
-      let!(:team) { Fabricate(:team, premium: true, stripe_customer_id: 'customer_id') }
+    context 'subscribed team' do
+      let!(:team) { Fabricate(:team, subscribed: true, stripe_customer_id: 'customer_id') }
       it 'fails to create a subscription' do
         expect do
           client.subscriptions._post(
             team_id: team._id,
             stripe_token: 'token',
             stripe_token_type: 'card',
-            stripe_email: 'foo@bar.com')
+            stripe_email: 'foo@bar.com'
+          )
         end.to raise_error Faraday::ClientError do |e|
           json = JSON.parse(e.response[:body])
-          expect(json['error']).to eq 'Already a Premium Subscription'
+          expect(json['error']).to eq 'Already a Subscriber'
         end
       end
     end
-    context 'non-premium team with a customer_id' do
+    context 'non-subscribed team with a customer_id' do
       let!(:team) { Fabricate(:team, stripe_customer_id: 'customer_id') }
       it 'fails to create a subscription' do
         expect do
@@ -34,7 +35,8 @@ describe Api::Endpoints::SubscriptionsEndpoint do
             team_id: team._id,
             stripe_token: 'token',
             stripe_token_type: 'card',
-            stripe_email: 'foo@bar.com')
+            stripe_email: 'foo@bar.com'
+          )
         end.to raise_error Faraday::ClientError do |e|
           json = JSON.parse(e.response[:body])
           expect(json['error']).to eq 'Customer Already Registered'
@@ -57,7 +59,7 @@ describe Api::Endpoints::SubscriptionsEndpoint do
           team.reload
         end
         it 'creates a subscription' do
-          expect(team.premium).to be true
+          expect(team.subscribed).to be true
           expect(team.stripe_customer_id).to_not be_blank
           customer = Stripe::Customer.retrieve(team.stripe_customer_id)
           expect(customer).to_not be nil
@@ -88,7 +90,7 @@ describe Api::Endpoints::SubscriptionsEndpoint do
           team.reload
         end
         it 'creates a subscription' do
-          expect(team.premium).to be true
+          expect(team.subscribed).to be true
           expect(team.stripe_customer_id).to_not be_blank
           customer = Stripe::Customer.retrieve(team.stripe_customer_id)
           expect(customer).to_not be nil

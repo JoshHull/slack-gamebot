@@ -1,7 +1,9 @@
 module SlackGamebot
   module Commands
     class Leaderboard < SlackRubyBot::Commands::Base
-      def self.call(client, data, match)
+      include SlackGamebot::Commands::Mixins::Subscription
+
+      subscribed_command 'leaderboard' do |client, data, match|
         max = 3
         reverse = false
         arguments = match['expression'].split.reject(&:blank?) if match['expression']
@@ -12,12 +14,12 @@ module SlackGamebot
             reverse = true
             number = number[1..-1]
           end
-          case number.downcase
-          when 'infinity'
-            max = nil
-          else
-            max = Integer(number)
-          end
+          max = case number.downcase
+                when 'infinity'
+                  nil
+                else
+                  Integer(number)
+                end
         end
         ranked_players = client.owner.users.ranked
         if ranked_players.any?

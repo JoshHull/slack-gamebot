@@ -1,7 +1,9 @@
 module SlackGamebot
   module Commands
     class Draw < SlackRubyBot::Commands::Base
-      def self.call(client, data, match)
+      include SlackGamebot::Commands::Mixins::Subscription
+
+      subscribed_command 'draw' do |client, data, match|
         challenger = ::User.find_create_or_update_by_slack_id!(client, data.user)
         challenge = ::Challenge.find_by_user(client.owner, data.channel, challenger, [ChallengeState::PROPOSED, ChallengeState::ACCEPTED])
         scores = Score.parse(match['expression']) if match['expression']
@@ -28,7 +30,7 @@ module SlackGamebot
           logger.info "DRAW: #{client.owner} - #{challenge}"
         else
           match = ::Match.any_of({ winner_ids: challenger.id }, loser_ids: challenger.id).desc(:id).first
-          if match && match.tied?
+          if match&.tied?
             match.update_attributes!(scores: scores)
             client.say(channel: data.channel, text: "Match scores have been updated! #{match}.", gif: 'score')
             logger.info "SCORED: #{client.owner} - #{match}"

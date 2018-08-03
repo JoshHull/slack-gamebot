@@ -10,7 +10,7 @@ module Api
       property :name, type: String, desc: 'Team name.'
       property :domain, type: String, desc: 'Team domain.'
       property :active, type: Boolean, desc: 'Team is active.'
-      property :premium, type: Boolean, desc: 'Team is a premium subscriber.'
+      property :subscribed, type: Boolean, desc: 'Team is a subscriber.'
       property :gifs, type: Boolean, desc: 'Team loves animated GIFs.'
       property :aliases, type: Array, desc: 'Game aliases.'
       property :elo, type: Integer, desc: 'Base elo.'
@@ -20,39 +20,39 @@ module Api
 
       link :challenges do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/challenges?team_id=#{represented.id}"
+        "#{request.base_url}/api/challenges?team_id=#{represented.id}"
       end
 
       link :matches do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/matches?team_id=#{represented.id}"
+        "#{request.base_url}/api/matches?team_id=#{represented.id}"
       end
 
       link :seasons do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/seasons?team_id=#{represented.id}"
+        "#{request.base_url}/api/seasons?team_id=#{represented.id}"
       end
 
       link :users do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/users?team_id=#{represented.id}"
+        "#{request.base_url}/api/users?team_id=#{represented.id}"
       end
 
       link :captains do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/users?team_id=#{represented.id}&captain=true"
+        "#{request.base_url}/api/users?team_id=#{represented.id}&captain=true"
       end
 
       link :game do |opts|
         if represented.game_id
           request = Grape::Request.new(opts[:env])
-          "#{request.base_url}/games/#{represented.game_id}"
+          "#{request.base_url}/api/games/#{represented.game_id}"
         end
       end
 
       link :self do |opts|
         request = Grape::Request.new(opts[:env])
-        "#{request.base_url}/teams/#{id}"
+        "#{request.base_url}/api/teams/#{id}"
       end
     end
   end

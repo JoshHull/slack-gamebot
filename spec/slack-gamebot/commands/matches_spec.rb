@@ -5,6 +5,7 @@ describe SlackGamebot::Commands::Matches, vcr: { cassette_name: 'user_info' } do
   let(:app) { SlackGamebot::Server.new(team: team) }
   let(:client) { app.send(:client) }
   shared_examples_for 'matches' do
+    let!(:team) { Fabricate(:team) }
     let(:user) { Fabricate(:user, user_name: 'username') }
     let(:singles_challenge) { Fabricate(:challenge, challengers: [user]) }
     let(:doubles_challenge) { Fabricate(:doubles_challenge, challengers: [user, Fabricate(:user)]) }

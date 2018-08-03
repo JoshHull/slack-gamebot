@@ -1,9 +1,9 @@
 module SlackGamebot
   module Commands
     class Seasons < SlackRubyBot::Commands::Base
-      include SlackGamebot::Commands::Mixins::Premium
+      include SlackGamebot::Commands::Mixins::Subscription
 
-      premium_command 'seasons' do |client, data, _match|
+      subscribed_command 'seasons' do |client, data, _match|
         current_season = ::Season.new(team: client.owner)
         if current_season.valid?
           message = [current_season, client.owner.seasons.desc(:_id)].flatten.map(&:to_s).join("\n")
@@ -12,7 +12,7 @@ module SlackGamebot
           message = client.owner.seasons.desc(:_id).map(&:to_s).join("\n")
           client.say(channel: data.channel, text: message)
         else
-          client.say(channel: data.channel, text: "There're no seasons.", gif: %w(winter summer fall spring).sample)
+          client.say(channel: data.channel, text: "There're no seasons.", gif: %w[winter summer fall spring].sample)
         end
         logger.info "SEASONS: #{client.owner} - #{data.user}"
       end

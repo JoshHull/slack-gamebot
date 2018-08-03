@@ -1,30 +1,35 @@
 module SlackGamebot
   module Commands
     class Matches < SlackRubyBot::Commands::Base
-      def self.call(client, data, match)
+      include SlackGamebot::Commands::Mixins::Subscription
+
+      subscribed_command 'matches' do |client, data, match|
         totals = {}
         totals.default = 0
         arguments = match['expression'].split.reject(&:blank?) if match['expression']
         # limit
         max = 10
-        case arguments.last.downcase
-        when 'infinity'
-          max = nil
-        else
-          begin
-            Integer(arguments.last).tap do |value|
-              max = value
-              arguments.pop
+        if arguments&.any?
+          case arguments.last.downcase
+          when 'infinity'
+            max = nil
+          else
+            begin
+              Integer(arguments.last).tap do |value|
+                max = value
+                arguments.pop
+              end
+            rescue ArgumentError
+              # ignore
             end
-          rescue ArgumentError
           end
-        end if arguments && arguments.any?
+        end
         # users
         team = client.owner
-        users = ::User.find_many_by_slack_mention!(team, arguments) if arguments && arguments.any?
-        user_ids = users.map(&:id) if users && users.any?
+        users = ::User.find_many_by_slack_mention!(client, arguments) if arguments&.any?
+        user_ids = users.map(&:id) if users&.any?
         matches = team.matches.current
-        matches = matches.any_of({ :winner_ids.in => user_ids }, :loser_ids.in => user_ids) if user_ids && user_ids.any?
+        matches = matches.any_of({ :winner_ids.in => user_ids }, :loser_ids.in => user_ids) if user_ids&.any?
         matches.each do |m|
           totals[m.to_s] += 1
         end
@@ -40,7 +45,7 @@ module SlackGamebot
             "#{s} #{count} times"
           end
         end.join("\n")
-        client.say(channel: data.channel, text: message.length > 0 ? message : 'No matches.')
+        client.say(channel: data.channel, text: !message.empty? ? message : 'No matches.')
         logger.info "MATCHES: #{team} - #{data.user}"
       end
     end

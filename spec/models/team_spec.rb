@@ -61,43 +61,31 @@ describe Team do
       expect(Team.find(inactive_team_a_month_ago.id)).to be nil
     end
   end
-  context '#nudge? #dead? and #asleep?' do
+  context '#dead? and #asleep?' do
     context 'default' do
       let(:team) { Fabricate(:team) }
       it 'false' do
         expect(team.asleep?).to be false
-        expect(team.nudge?).to be false
         expect(team.dead?).to be false
       end
     end
     context 'team created three weeks ago' do
       let(:team) { Fabricate(:team, created_at: 3.weeks.ago) }
-      it 'nudge=true dead=false' do
+      it 'dead=false' do
         expect(team.asleep?).to be true
-        expect(team.nudge?).to be true
         expect(team.dead?).to be false
       end
       context 'with a recent challenge' do
         let!(:challenge) { Fabricate(:challenge, team: team) }
         it 'false' do
           expect(team.asleep?).to be false
-          expect(team.nudge?).to be false
           expect(team.dead?).to be false
-        end
-        context 'awaken three weeks ago' do
-          before do
-            team.update_attributes!(nudge_at: 3.weeks.ago)
-          end
-          it 'nudge' do
-            expect(team.nudge?).to be false
-          end
         end
       end
       context 'with a recent match' do
         let!(:match) { Fabricate(:match, team: team) }
         it 'false' do
           expect(team.asleep?).to be false
-          expect(team.nudge?).to be false
           expect(team.dead?).to be false
         end
       end
@@ -105,7 +93,6 @@ describe Team do
         let!(:match) { Fabricate(:match_lost_to, team: team) }
         it 'false' do
           expect(team.asleep?).to be false
-          expect(team.nudge?).to be false
           expect(team.dead?).to be false
         end
       end
@@ -113,30 +100,13 @@ describe Team do
         let!(:challenge) { Fabricate(:challenge, updated_at: 3.weeks.ago, team: team) }
         it 'true' do
           expect(team.asleep?).to be true
-          expect(team.nudge?).to be true
           expect(team.dead?).to be false
-        end
-        context 'recently awaken' do
-          before do
-            team.update_attributes!(nudge_at: Time.now)
-          end
-          it 'do not nudge' do
-            expect(team.nudge?).to be false
-          end
-        end
-        context 'awaken three weeks ago' do
-          before do
-            team.update_attributes!(nudge_at: 3.weeks.ago)
-          end
-          it 'nudge' do
-            expect(team.nudge?).to be true
-          end
         end
       end
     end
     context 'team created over a month ago' do
-      let(:team) { Fabricate(:team, created_at: 1.month.ago + 1.day) }
-      it 'dead=false' do
+      let(:team) { Fabricate(:team, created_at: 32.days.ago) }
+      it 'dead=true' do
         expect(team.dead?).to be true
       end
       context 'with a recent challenge' do
@@ -153,52 +123,6 @@ describe Team do
       end
     end
   end
-  context '#nudge!' do
-    let(:team) { Fabricate(:team) }
-    let(:client) { double(Slack::Web::Client) }
-    before do
-      allow(Slack::Web::Client).to receive(:new).with(token: team.token).and_return(client)
-      allow(Giphy).to receive(:random).with('nudge').and_return(nil)
-    end
-    it 'sends a challenge message to the active channel' do
-      expect(client).to receive(:channels_list).and_return(
-        'channels' => [
-          { 'name' => 'general', 'is_member' => false, 'id' => 'general_id' },
-          { 'name' => 'pong', 'is_member' => true, 'id' => 'pong_id' }
-        ]
-      )
-      expect(client).to receive(:chat_postMessage).with(
-        text: "Challenge someone to a game of #{team.game.name} today!",
-        channel: 'pong_id',
-        as_user: true
-      )
-      expect do
-        team.nudge!
-      end.to change(team, :nudge_at)
-    end
-    it 'sends a challenge message to the first active channel' do
-      expect(client).to receive(:channels_list).and_return(
-        'channels' => [
-          { 'name' => 'general', 'is_member' => true, 'id' => 'general_id' },
-          { 'name' => 'pong', 'is_member' => true, 'id' => 'pong_id' }
-        ]
-      )
-      expect(client).to receive(:chat_postMessage).once
-      team.nudge!
-    end
-    it 'does not nudge when not a member of any channels' do
-      expect(client).to receive(:channels_list).and_return(
-        'channels' => [
-          { 'name' => 'general', 'is_member' => false, 'id' => 'general_id' },
-          { 'name' => 'pong', 'is_member' => false, 'id' => 'pong_id' }
-        ]
-      )
-      expect(client).to_not receive(:chat_postMessage)
-      expect do
-        team.nudge!
-      end.to change(team, :nudge_at)
-    end
-  end
   context 'gifs' do
     let!(:team) { Fabricate(:team) }
     context 'with a played challenge' do
@@ -210,6 +134,62 @@ describe Team do
           expect { team.update_attributes!(gifs: !team.gifs) }.to_not raise_error
         end
       end
+    end
+  end
+  context 'subscribed states' do
+    let(:today) { DateTime.parse('2018/7/15 12:42pm') }
+    let(:subscribed_team) { Fabricate(:team, subscribed: true) }
+    let(:team_created_today) { Fabricate(:team, created_at: today) }
+    let(:team_created_1_week_ago) { Fabricate(:team, created_at: (today - 1.week)) }
+    let(:team_created_3_weeks_ago) { Fabricate(:team, created_at: (today - 3.weeks)) }
+    before do
+      Timecop.travel(today + 1.day)
+    end
+    it 'subscription_expired?' do
+      expect(subscribed_team.subscription_expired?).to be false
+      expect(team_created_1_week_ago.subscription_expired?).to be false
+      expect(team_created_3_weeks_ago.subscription_expired?).to be true
+    end
+    it 'trial_ends_at' do
+      expect { subscribed_team.trial_ends_at }.to raise_error 'Team is subscribed.'
+      expect(team_created_today.trial_ends_at).to eq team_created_today.created_at + 2.weeks
+      expect(team_created_1_week_ago.trial_ends_at).to eq team_created_1_week_ago.created_at + 2.weeks
+      expect(team_created_3_weeks_ago.trial_ends_at).to eq team_created_3_weeks_ago.created_at + 2.weeks
+    end
+    it 'remaining_trial_days' do
+      expect { subscribed_team.remaining_trial_days }.to raise_error 'Team is subscribed.'
+      expect(team_created_today.remaining_trial_days).to eq 13
+      expect(team_created_1_week_ago.remaining_trial_days).to eq 6
+      expect(team_created_3_weeks_ago.remaining_trial_days).to eq 0
+    end
+    context '#inform_trial!' do
+      it 'subscribed' do
+        expect(subscribed_team).to_not receive(:inform!)
+        expect(subscribed_team).to_not receive(:inform_admin!)
+        subscribed_team.inform_trial!
+      end
+      it '1 week ago' do
+        expect(team_created_1_week_ago).to receive(:inform!).with(
+          "Your trial subscription expires in 6 days. #{team_created_1_week_ago.subscribe_text}"
+        )
+        expect(team_created_1_week_ago).to receive(:inform_admin!).with(
+          "Your trial subscription expires in 6 days. #{team_created_1_week_ago.subscribe_text}"
+        )
+        team_created_1_week_ago.inform_trial!
+      end
+      it 'expired' do
+        expect(team_created_3_weeks_ago).to_not receive(:inform!)
+        expect(team_created_3_weeks_ago).to_not receive(:inform_admin!)
+        team_created_3_weeks_ago.inform_trial!
+      end
+      it 'informs once' do
+        expect(team_created_1_week_ago).to receive(:inform!).once
+        expect(team_created_1_week_ago).to receive(:inform_admin!).once
+        2.times { team_created_1_week_ago.inform_trial! }
+      end
+    end
+    after do
+      Timecop.return
     end
   end
 end

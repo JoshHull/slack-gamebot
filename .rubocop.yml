@@ -3,4 +3,17 @@ AllCops:
     - vendor/**/*
     - bin/**/*
 
+Metrics:
+  Enabled: false
+
+Metrics/LineLength:
+  Max: 500
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
 inherit_from: .rubocop_todo.yml

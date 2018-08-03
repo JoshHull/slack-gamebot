@@ -44,6 +44,10 @@ Politely says 'hi' back.
 
 Get help.
 
+#### gamebot info
+
+Bot credits.
+
 #### gamebot sucks
 
 You can tell the bot that it sucks. But it will talk back.
@@ -52,7 +56,7 @@ You can tell the bot that it sucks. But it will talk back.
 
 #### gamebot register
 
-Registers a user.
+Re-registers a user. This is automatic, but a user can unregister and come back with this command.
 
 ![](screenshots/register.gif)
 
@@ -197,6 +201,16 @@ gamebot cancel
 Victor Barna and Deng Yaping canceled a challenge against Wang Hoe and Zhang Jike.
 ```
 
+#### gamebot taunt &lt;opponent&gt; [&lt;opponent&gt; ...]
+
+Taunt other players.
+
+```
+gamebot taunt @WangHoe
+
+Victor Barna says Wang Hoe sucks at ping pong!
+```
+
 #### gamebot leaderboard [number|infinity]
 
 Get the leaderboard.
@@ -328,6 +342,8 @@ gamebot unregister @WangHoe
 
 I've removed @WangHoe from the leaderboard.
 ```
+
+Users that have left a Slack team can be removed by omitting the `@`, eg. `gamebot unregister WangHoe`.
 
 #### gamebot set nickname [name]
 

@@ -2,14 +2,20 @@ class Team
   field :gifs, type: Boolean, default: true
   field :api, type: Boolean, default: false
   field :aliases, type: Array, default: []
-  field :nudge_at, type: DateTime
+  field :dead_at, type: DateTime
+  field :trial_informed_at, type: DateTime
   field :elo, type: Integer, default: 0
   field :unbalanced, type: Boolean, default: false
 
   field :stripe_customer_id, type: String
-  field :premium, type: Boolean, default: false
+  field :subscribed, type: Boolean, default: false
+  field :subscribed_at, type: DateTime
+
+  field :bot_user_id, type: String
+  field :activated_user_id, type: String
 
   scope :api, -> { where(api: true) }
+  scope :subscribed, -> { where(subscribed: true) }
 
   validates_presence_of :game_id
 
@@ -20,14 +26,47 @@ class Team
 
   belongs_to :game
 
-  after_update :inform_premium_changed!
+  before_validation :update_subscribed_at
+  after_update :inform_subscribed_changed!
 
-  def premium_text
-    "This is a premium feature. #{upgrade_text}"
+  def subscription_expired?
+    return false if subscribed?
+    time_limit = Time.now.utc - 2.weeks
+    return false if created_at > time_limit
+    true
   end
 
-  def upgrade_text
-    "Upgrade your team to premium for $29.99 a year at https://www.playplay.io/upgrade?team_id=#{team_id}&game=#{game.name}."
+  def trial_ends_at
+    raise 'Team is subscribed.' if subscribed?
+    created_at + 2.weeks
+  end
+
+  def remaining_trial_days
+    raise 'Team is subscribed.' if subscribed?
+    [0, (trial_ends_at.to_date - Time.now.utc.to_date).to_i].max
+  end
+
+  def trial_message
+    [
+      remaining_trial_days.zero? ? 'Your trial subscription has expired.' : "Your trial subscription expires in #{remaining_trial_days} day#{remaining_trial_days == 1 ? '' : 's'}.",
+      subscribe_text
+    ].join(' ')
+  end
+
+  def inform_trial!
+    return if subscribed? || subscription_expired?
+    return if trial_informed_at && (Time.now.utc < trial_informed_at + 7.days)
+    inform! trial_message
+    inform_admin! trial_message
+    update_attributes!(trial_informed_at: Time.now.utc)
+  end
+
+  def subscribe_text
+    "Subscribe your team for $29.99 a year at #{SlackGamebot::Service.url}/subscribe?team_id=#{team_id}&game=#{game.name}."
+  end
+
+  def update_cc_text
+    "Update your credit card info at #{SlackGamebot::Service.url}/update_cc?team_id=#{team_id}&game=#{game.name}."
   end
 
   def captains
@@ -46,7 +85,7 @@ class Team
   end
 
   def asleep?(dt = 2.weeks)
-    time_limit = Time.now - dt
+    time_limit = Time.now.utc - dt
     return false if created_at > time_limit
     recent_match = matches.desc(:updated_at).limit(1).first
     return false if recent_match && recent_match.updated_at >= time_limit
@@ -55,40 +94,36 @@ class Team
     true
   end
 
-  def nudge?(dt = 2.weeks)
-    time_limit = Time.now - dt
-    return false if nudge_at && nudge_at > time_limit
+  def dead?(dt = 1.month)
     asleep?(dt)
   end
 
-  def dead?(dt = 4.weeks)
-    asleep?(dt)
-  end
-
-  def nudge!
-    inform! "Challenge someone to a game of #{game.name} today!", 'nudge'
-    update_attributes!(nudge_at: Time.now)
+  def dead!(message, gif = nil)
+    inform! message, gif
+    inform_admin! message, gif
+    update_attributes!(dead_at: Time.now.utc)
   end
 
   def api_url
-    return unless api? && ENV.key?('API_URL')
-    "#{ENV['API_URL']}/teams/#{id}"
+    return unless api?
+    "#{SlackGamebot::Service.api_url}/teams/#{id}"
   end
 
   def inform!(message, gif_name = nil)
     client = Slack::Web::Client.new(token: token)
-    channels = client.channels_list['channels'].select { |channel| channel['is_member'] }
-    return unless channels.any?
-    channel = channels.first
-    logger.info "Sending '#{message}' to #{self} on ##{channel['name']}."
-    gif = begin
-      Giphy.random(gif_name)
-    rescue StandardError => e
-      logger.warn "Giphy.random: #{e.message}"
-      nil
-    end if gif_name && gifs?
-    text = [message, gif && gif.image_url.to_s].compact.join("\n")
-    client.chat_postMessage(text: text, channel: channel['id'], as_user: true)
+    channels = client.channels_list['channels'].select { |channel| channel['is_member'] } # TODO: paginate
+    channels.each do |channel|
+      logger.info "Sending '#{message}' to #{self} on ##{channel['name']}."
+      client.chat_postMessage(text: make_message(message, gif_name), channel: channel['id'], as_user: true)
+    end
+  end
+
+  def inform_admin!(message, gif_name = nil)
+    client = Slack::Web::Client.new(token: token)
+    return unless activated_user_id
+    channel = client.im_open(user: activated_user_id)
+    logger.info "Sending DM '#{message}' to #{activated_user_id}."
+    client.chat_postMessage(text: make_message(message, gif_name), channel: channel.channel.id, as_user: true)
   end
 
   def self.find_or_create_from_env!
@@ -107,13 +142,30 @@ class Team
 
   private
 
-  UPGRADED_TEXT = <<-EOS
-Your team has been upgraded, enjoy all premium features. Thanks for supporting open-source!
+  SUBSCRIBED_TEXT = <<-EOS.freeze
+Your team has been subscribed. Thank you!
 Follow https://twitter.com/playplayio for news and updates.
 EOS
 
-  def inform_premium_changed!
-    return unless premium? && premium_changed?
-    inform! UPGRADED_TEXT, 'thanks'
+  def make_message(message, gif_name = nil)
+    if gif_name && gifs?
+      gif = begin
+        Giphy.random(gif_name)
+      rescue StandardError => e
+        logger.warn "Giphy.random: #{e.message}"
+        nil
+      end
+    end
+    [message, gif && gif.image_url.to_s].compact.join("\n")
+  end
+
+  def update_subscribed_at
+    return unless subscribed? && subscribed_changed?
+    self.subscribed_at = subscribed? ? DateTime.now.utc : nil
+  end
+
+  def inform_subscribed_changed!
+    return unless subscribed? && subscribed_changed?
+    inform! SUBSCRIBED_TEXT, 'thanks'
   end
 end

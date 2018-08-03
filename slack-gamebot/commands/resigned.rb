@@ -1,7 +1,9 @@
 module SlackGamebot
   module Commands
     class Resigned < SlackRubyBot::Commands::Base
-      def self.call(client, data, match)
+      include SlackGamebot::Commands::Mixins::Subscription
+
+      subscribed_command 'resigned' do |client, data, match|
         challenger = ::User.find_create_or_update_by_slack_id!(client, data.user)
         expression = match['expression'] if match['expression']
         arguments = expression.split.reject(&:blank?) if expression
@@ -9,10 +11,10 @@ module SlackGamebot
         scores = nil
         opponents = []
         teammates = [challenger]
-        multi_player = expression && expression.include?(' with ')
+        multi_player = expression&.include?(' with ')
 
         current = :scores
-        while arguments && arguments.any?
+        while arguments&.any?
           argument = arguments.shift
           case argument
           when 'to' then
@@ -21,10 +23,10 @@ module SlackGamebot
             current = :teammates
           else
             if current == :opponents
-              opponents << ::User.find_by_slack_mention!(client.owner, argument)
+              opponents << ::User.find_by_slack_mention!(client, argument)
               current = :scores unless multi_player
             elsif current == :teammates
-              teammates << ::User.find_by_slack_mention!(client.owner, argument)
+              teammates << ::User.find_by_slack_mention!(client, argument)
               current = :scores if opponents.count == teammates.count
             else
               scores ||= []
@@ -35,7 +37,7 @@ module SlackGamebot
 
         challenge = ::Challenge.find_by_user(client.owner, data.channel, challenger, [ChallengeState::PROPOSED, ChallengeState::ACCEPTED])
 
-        if scores && scores.any?
+        if scores&.any?
           client.say(channel: data.channel, text: 'Cannot score when resigning.', gif: 'idiot')
           logger.info "RESIGNED: #{client.owner} - #{data.user}, cannot score."
         elsif opponents.any? && (challenge.nil? || (challenge.challengers != opponents && challenge.challenged != opponents))
