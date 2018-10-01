@@ -127,17 +127,29 @@ class Match
             end
 
     winners.each do |winner|
-      e = 100 - 1.0 / (1.0 + (10.0**((losers_elo - winner.elo) / 400.0))) * 100
-      winner.tau += 0.5
-      winner.elo += e * ratio * (Elo::DELTA_TAU**winner.tau) * winners_ratio
+      divisionDifference = (winners_division - losers_division)
+      winners.elo += Elo.match_points(divisionDifference);
       winner.save!
-    end
-
-    losers.each do |loser|
-      e = 100 - 1.0 / (1.0 + (10.0**((loser.elo - winners_elo) / 400.0))) * 100
-      loser.tau += 0.5
-      loser.elo -= e * ratio * (Elo::DELTA_TAU**loser.tau) * losers_ratio
+      end
+  
+  losers.each do |loser|
+      divisionDifference = (winners_division - losers_division)
+      losers.elo -= Elo.match_points(-1 * divisionDifference);
       loser.save!
-    end
+      end
+
+    # winners.each do |winner|
+    #   e = 100 - 1.0 / (1.0 + (10.0**((losers_elo - winner.elo) / 400.0))) * 100
+    #   winner.tau += 0.5
+    #   winner.elo += e * ratio * (Elo::DELTA_TAU**winner.tau) * winners_ratio
+    #   winner.save!
+    # end
+
+    # losers.each do |loser|
+    #   e = 100 - 1.0 / (1.0 + (10.0**((loser.elo - winners_elo) / 400.0))) * 100
+    #   loser.tau += 0.5
+    #   loser.elo -= e * ratio * (Elo::DELTA_TAU**loser.tau) * losers_ratio
+    #   loser.save!
+    # end
   end
 end

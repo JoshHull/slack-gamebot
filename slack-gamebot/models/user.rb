@@ -13,6 +13,7 @@ class User
   field :elo_history, type: Array, default: []
   field :tau, type: Float, default: 0
   field :rank, type: Integer
+  field :division, type:
   field :captain, type: Boolean, default: false
   field :registered, type: Boolean, default: true
   field :nickname, type: String
